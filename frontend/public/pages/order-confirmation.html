@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order Confirmed — TechShop</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">TechShop</a>
+    </div>
+  </nav>
+
+  <div class="container" style="max-width:600px; margin-top:3rem;">
+    <div class="card">
+      <div class="card-body" style="text-align:center;">
+        <div class="success-icon">✓</div>
+        <h1 style="font-size:1.75rem; font-weight:700; margin-bottom:0.5rem;">Order Placed!</h1>
+        <p style="color:var(--text-muted); margin-bottom:1.5rem;">Thank you for your purchase. Your order has been confirmed.</p>
+
+        <div style="background:var(--bg); border-radius:var(--radius); padding:1rem; text-align:left; margin-bottom:1.5rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+            <span style="color:var(--text-muted); font-size:0.875rem;">Order ID</span>
+            <span id="order-id" style="font-family:monospace; font-size:0.875rem;"></span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:var(--text-muted); font-size:0.875rem;">Transaction ID</span>
+            <span id="transaction-id" style="font-family:monospace; font-size:0.875rem;"></span>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:1rem; justify-content:center;">
+          <a href="/" class="btn btn-primary">Continue Shopping</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const orderId = localStorage.getItem('lastOrderId') || 'N/A';
+      const txId = localStorage.getItem('lastTransactionId') || 'N/A';
+      document.getElementById('order-id').textContent = orderId;
+      document.getElementById('transaction-id').textContent = txId;
+      localStorage.removeItem('lastOrderId');
+      localStorage.removeItem('lastTransactionId');
+    });
+  </script>
+</body>
+</html>

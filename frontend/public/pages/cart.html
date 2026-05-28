@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cart — TechShop</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">TechShop</a>
+      <ul class="navbar-nav">
+        <li><a href="/">Catalog</a></li>
+        <li class="nav-user" style="display:none;">
+          <span style="font-size:0.875rem; color:var(--text-muted);">Hi, <strong class="nav-username"></strong></span>
+        </li>
+        <li class="nav-user" style="display:none;"><a href="#" id="logout-btn">Logout</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1 class="page-title">Shopping Cart</h1>
+      <p class="page-subtitle"><span id="item-count">0</span> items in your cart</p>
+    </div>
+
+    <div id="alert-container"></div>
+
+    <div style="display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start;">
+      <div class="card">
+        <div class="card-body">
+          <div id="cart-empty" style="display:none; text-align:center; padding:2rem; color:var(--text-muted);">
+            <p style="font-size:1.1rem; margin-bottom:1rem;">Your cart is empty</p>
+            <a href="/" class="btn btn-primary">Continue Shopping</a>
+          </div>
+          <div id="cart-items"></div>
+          <div style="display:flex; justify-content:space-between; margin-top:1rem;">
+            <button id="clear-cart-btn" class="btn btn-outline btn-sm">Clear Cart</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="cart-summary" class="cart-summary" style="display:none;">
+        <h3 style="margin-bottom:1rem;">Order Summary</h3>
+        <div class="cart-total">
+          <span>Total</span>
+          <span id="cart-total">$0.00</span>
+        </div>
+        <button id="checkout-btn" class="btn btn-primary btn-block" style="margin-top:1rem;">Proceed to Checkout</button>
+        <a href="/" class="btn btn-outline btn-block" style="margin-top:0.5rem;">Continue Shopping</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/cart.js"></script>
+</body>
+</html>

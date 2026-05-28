@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Checkout — TechShop</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">TechShop</a>
+      <ul class="navbar-nav">
+        <li><a href="/pages/cart.html">← Back to Cart</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1 class="page-title">Checkout</h1>
+    </div>
+
+    <div id="alert-container"></div>
+
+    <div style="display:grid; grid-template-columns: 1fr 340px; gap:1.5rem; align-items:start;">
+      <form id="checkout-form" novalidate>
+        <div class="card" style="margin-bottom:1.5rem;">
+          <div class="card-header">Shipping Information</div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Full Name</label>
+              <input type="text" id="ship-name" class="form-control" placeholder="John Doe" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Address</label>
+              <input type="text" id="ship-address" class="form-control" placeholder="123 Main St" required />
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label class="form-label">City</label>
+                <input type="text" id="ship-city" class="form-control" placeholder="New York" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">ZIP Code</label>
+                <input type="text" id="ship-zip" class="form-control" placeholder="10001" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Country</label>
+              <input type="text" id="ship-country" class="form-control" placeholder="United States" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Payment (Simulated)</div>
+          <div class="card-body">
+            <div class="alert alert-info" style="margin-bottom:1rem; font-size:0.85rem;">
+              This is a simulated payment. Use any values.
+            </div>
+            <div class="form-group">
+              <label class="form-label">Card Number</label>
+              <input type="text" id="card-number" class="form-control" placeholder="4111 1111 1111 1111" required maxlength="19" />
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label class="form-label">Expiry</label>
+                <input type="text" id="card-expiry" class="form-control" placeholder="MM/YY" required maxlength="5" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">CVV</label>
+                <input type="text" id="card-cvv" class="form-control" placeholder="123" required maxlength="4" />
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:0.5rem; padding:0.75rem;">
+              Place Order
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <div class="card">
+        <div class="card-header">Order Summary</div>
+        <div class="card-body">
+          <div id="order-summary"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/checkout.js"></script>
+</body>
+</html>

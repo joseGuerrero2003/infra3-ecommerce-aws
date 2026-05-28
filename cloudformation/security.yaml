@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECommerce Security Stack - Security Groups and IAM Roles'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+  ProjectName:
+    Type: String
+    Default: ecommerce
+  AllowedBastionCIDR:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to SSH to Bastion Host
+
+Resources:
+  SgALB:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB - Allow HTTP from internet
+      VpcId: !ImportValue
+        Fn::Sub: '${ProjectName}-${Environment}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-sg-alb'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  SgApp:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App EC2 - Allow traffic from ALB and Bastion
+      VpcId: !ImportValue
+        Fn::Sub: '${ProjectName}-${Environment}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref SgALB
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref SgBastion
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-sg-app'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  SgBastion:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bastion Host - SSH access
+      VpcId: !ImportValue
+        Fn::Sub: '${ProjectName}-${Environment}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedBastionCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-sg-bastion'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  SgRDS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS PostgreSQL - Allow from App only
+      VpcId: !ImportValue
+        Fn::Sub: '${ProjectName}-${Environment}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref SgApp
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-sg-rds'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-ec2-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${ProjectName}-${Environment}-ec2-profile'
+      Roles:
+        - !Ref EC2Role
+
+Outputs:
+  SgAlbId:
+    Value: !Ref SgALB
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-SgAlbId'
+
+  SgAppId:
+    Value: !Ref SgApp
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-SgAppId'
+
+  SgBastionId:
+    Value: !Ref SgBastion
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-SgBastionId'
+
+  SgRdsId:
+    Value: !Ref SgRDS
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-SgRdsId'
+
+  EC2InstanceProfileArn:
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-EC2InstanceProfileArn'
+
+  EC2RoleArn:
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-EC2RoleArn'

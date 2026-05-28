@@ -1,0 +1,20 @@
+[
+  { "ParameterKey": "Environment",       "ParameterValue": "dev" },
+  { "ParameterKey": "ProjectName",       "ParameterValue": "ecommerce" },
+  { "ParameterKey": "GitHubRepoUrl",     "ParameterValue": "https://github.com/YOUR_USER/YOUR_REPO.git" },
+  { "ParameterKey": "GitHubBranch",      "ParameterValue": "main" },
+  { "ParameterKey": "BastionKeyName",    "ParameterValue": "vockey" },
+  { "ParameterKey": "AllowedBastionCIDR","ParameterValue": "0.0.0.0/0" },
+  { "ParameterKey": "DBUsername",        "ParameterValue": "dbadmin" },
+  { "ParameterKey": "DBPassword",        "ParameterValue": "CHANGE_ME_STRONG_PASS_123!" },
+  { "ParameterKey": "DBName",            "ParameterValue": "ecommerce" },
+  { "ParameterKey": "JwtSecret",         "ParameterValue": "CHANGE_ME_JWT_SECRET_MIN_32_CHARS_LONG" },
+  { "ParameterKey": "JwtRefreshSecret",  "ParameterValue": "CHANGE_ME_REFRESH_SECRET_MIN_32_CHARS" },
+  { "ParameterKey": "NotificationEmail", "ParameterValue": "your-email@example.com" },
+  { "ParameterKey": "AppPort",           "ParameterValue": "3000" },
+  { "ParameterKey": "NodeEnvironment",   "ParameterValue": "production" },
+  { "ParameterKey": "InstanceType",      "ParameterValue": "t2.micro" },
+  { "ParameterKey": "AsgMinSize",        "ParameterValue": "1" },
+  { "ParameterKey": "AsgMaxSize",        "ParameterValue": "3" },
+  { "ParameterKey": "AsgDesiredSize",    "ParameterValue": "1" }
+]

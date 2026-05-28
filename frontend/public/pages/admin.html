@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — TechShop</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">TechShop Admin</a>
+      <ul class="navbar-nav">
+        <li><a href="/">Catalog</a></li>
+        <li class="nav-user" style="display:none;"><a href="#" id="logout-btn">Logout</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header" style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h1 class="page-title">Product Management</h1>
+        <p class="page-subtitle">Create, edit and manage products</p>
+      </div>
+      <button id="add-product-btn" class="btn btn-primary">+ Add Product</button>
+    </div>
+
+    <div id="alert-container"></div>
+
+    <div id="product-form-container" class="card" style="display:none; margin-bottom:1.5rem;">
+      <div class="card-header" id="form-title">Add Product</div>
+      <div class="card-body">
+        <form id="product-form">
+          <input type="hidden" id="product-id" />
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div class="form-group">
+              <label class="form-label">Name</label>
+              <input type="text" id="p-name" class="form-control" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <input type="text" id="p-category" class="form-control" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Price ($)</label>
+              <input type="number" id="p-price" class="form-control" step="0.01" min="0" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stock</label>
+              <input type="number" id="p-stock" class="form-control" min="0" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea id="p-description" class="form-control" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Image URL</label>
+            <input type="url" id="p-image" class="form-control" />
+          </div>
+          <div style="display:flex; gap:0.75rem;">
+            <button type="submit" class="btn btn-primary">Save Product</button>
+            <button type="button" id="cancel-form-btn" class="btn btn-outline">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body" style="padding:0; overflow-x:auto;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="products-table-body">
+            <tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      updateNavbar();
+      if (!requireAuth()) return;
+      if (localStorage.getItem('role') !== 'admin') {
+        showAlert('Admin access required');
+        setTimeout(() => window.location.href = '/', 1500);
+        return;
+      }
+
+      const loadAdminProducts = async () => {
+        const { data } = await products.list({ limit: 100 });
+        const tbody = document.getElementById('products-table-body');
+        tbody.textContent = '';
+        data.products.forEach((p) => {
+          const tr = document.createElement('tr');
+
+          const nameTd = document.createElement('td');
+          nameTd.style.fontWeight = '500';
+          nameTd.textContent = p.name;
+          tr.appendChild(nameTd);
+
+          const catTd = document.createElement('td');
+          catTd.textContent = p.category || '-';
+          tr.appendChild(catTd);
+
+          const priceTd = document.createElement('td');
+          priceTd.textContent = `$${parseFloat(p.price).toFixed(2)}`;
+          tr.appendChild(priceTd);
+
+          const stockTd = document.createElement('td');
+          stockTd.textContent = p.stock;
+          tr.appendChild(stockTd);
+
+          const statusTd = document.createElement('td');
+          const badge = document.createElement('span');
+          badge.className = p.is_active ? 'badge badge-success' : 'badge badge-danger';
+          badge.textContent = p.is_active ? 'Active' : 'Inactive';
+          statusTd.appendChild(badge);
+          tr.appendChild(statusTd);
+
+          const actionsTd = document.createElement('td');
+          actionsTd.style.cssText = 'display:flex; gap:0.5rem;';
+
+          const editBtn = document.createElement('button');
+          editBtn.className = 'btn btn-outline btn-sm';
+          editBtn.textContent = 'Edit';
+          editBtn.addEventListener('click', () => openEditForm(p));
+          actionsTd.appendChild(editBtn);
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'btn btn-danger btn-sm';
+          deleteBtn.textContent = 'Delete';
+          deleteBtn.addEventListener('click', () => deleteProduct(p.id, loadAdminProducts));
+          actionsTd.appendChild(deleteBtn);
+
+          tr.appendChild(actionsTd);
+          tbody.appendChild(tr);
+        });
+      };
+
+      const openEditForm = (p) => {
+        document.getElementById('form-title').textContent = 'Edit Product';
+        document.getElementById('product-id').value = p.id;
+        document.getElementById('p-name').value = p.name;
+        document.getElementById('p-category').value = p.category || '';
+        document.getElementById('p-price').value = p.price;
+        document.getElementById('p-stock').value = p.stock;
+        document.getElementById('p-description').value = p.description || '';
+        document.getElementById('p-image').value = p.image_url || '';
+        document.getElementById('product-form-container').style.display = 'block';
+      };
+
+      const deleteProduct = async (id, reload) => {
+        if (!confirm('Delete this product?')) return;
+        try {
+          await products.delete(id);
+          showAlert('Product deleted', 'success');
+          reload();
+        } catch (err) {
+          showAlert(err.message || 'Delete failed');
+        }
+      };
+
+      document.getElementById('add-product-btn').addEventListener('click', () => {
+        document.getElementById('form-title').textContent = 'Add Product';
+        document.getElementById('product-form').reset();
+        document.getElementById('product-id').value = '';
+        document.getElementById('product-form-container').style.display = 'block';
+      });
+
+      document.getElementById('cancel-form-btn').addEventListener('click', () => {
+        document.getElementById('product-form-container').style.display = 'none';
+      });
+
+      document.getElementById('product-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('product-id').value;
+        const payload = {
+          name: document.getElementById('p-name').value,
+          category: document.getElementById('p-category').value,
+          price: parseFloat(document.getElementById('p-price').value),
+          stock: parseInt(document.getElementById('p-stock').value),
+          description: document.getElementById('p-description').value,
+          image_url: document.getElementById('p-image').value,
+        };
+        try {
+          if (id) await products.update(id, payload);
+          else await products.create(payload);
+          showAlert('Product saved', 'success');
+          document.getElementById('product-form-container').style.display = 'none';
+          loadAdminProducts();
+        } catch (err) {
+          showAlert(err.message || 'Save failed');
+        }
+      });
+
+      loadAdminProducts();
+    });
+  </script>
+</body>
+</html>

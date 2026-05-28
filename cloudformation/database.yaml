@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECommerce Database Stack - RDS PostgreSQL'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+  ProjectName:
+    Type: String
+    Default: ecommerce
+  DBUsername:
+    Type: String
+    Default: dbadmin
+    NoEcho: false
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: RDS master password (min 8 chars)
+  DBName:
+    Type: String
+    Default: ecommerce
+
+Resources:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub '${ProjectName} ${Environment} DB Subnet Group'
+      SubnetIds:
+        - !ImportValue
+          Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetAId'
+        - !ImportValue
+          Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetBId'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-subnet-group'
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db'
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: '15.7'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: !Ref DBName
+      AllocatedStorage: '20'
+      StorageType: gp2
+      StorageEncrypted: false
+      MultiAZ: false
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !ImportValue
+          Fn::Sub: '${ProjectName}-${Environment}-SgRdsId'
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: 03:00-04:00
+      PreferredMaintenanceWindow: sun:04:00-sun:05:00
+      AutoMinorVersionUpgrade: true
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-postgres'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  DBEndpointParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/${Environment}/db/endpoint'
+      Type: String
+      Value: !GetAtt DBInstance.Endpoint.Address
+      Description: RDS Endpoint
+
+  DBPortParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/${Environment}/db/port'
+      Type: String
+      Value: !GetAtt DBInstance.Endpoint.Port
+      Description: RDS Port
+
+  DBNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/${Environment}/db/name'
+      Type: String
+      Value: !Ref DBName
+      Description: RDS DB Name
+
+Outputs:
+  RdsEndpoint:
+    Description: RDS PostgreSQL Endpoint
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-RdsEndpoint'
+
+  RdsPort:
+    Description: RDS Port
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-RdsPort'
+
+  DbName:
+    Description: Database Name
+    Value: !Ref DBName
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DbName'
+
+  DBInstanceId:
+    Description: RDS Instance ID
+    Value: !Ref DBInstance
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DBInstanceId'

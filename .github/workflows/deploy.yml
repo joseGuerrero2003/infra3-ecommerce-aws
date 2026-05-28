@@ -1,0 +1,73 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate & Test
+    uses: ./.github/workflows/validate.yml
+
+  deploy-infrastructure:
+    name: Deploy CloudFormation
+    runs-on: ubuntu-latest
+    needs: validate
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Deploy compute stack (rolling update)
+        run: |
+          aws cloudformation deploy \
+            --stack-name ecommerce-dev-compute \
+            --template-file cloudformation/compute.yaml \
+            --parameter-overrides \
+              Environment=dev \
+              ProjectName=ecommerce \
+              GitHubRepoUrl=${{ secrets.GITHUB_REPO_URL }} \
+              GitHubBranch=main \
+              BastionKeyName=${{ secrets.BASTION_KEY_NAME }} \
+              DBUsername=${{ secrets.DB_USERNAME }} \
+              DBPassword=${{ secrets.DB_PASSWORD }} \
+              DBName=ecommerce \
+              JwtSecret=${{ secrets.JWT_SECRET }} \
+              JwtRefreshSecret=${{ secrets.JWT_REFRESH_SECRET }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+
+      - name: Trigger instance refresh
+        run: |
+          ASG_NAME=$(aws cloudformation list-exports \
+            --query "Exports[?Name=='ecommerce-dev-AsgName'].Value" \
+            --output text)
+          aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name "$ASG_NAME" \
+            --preferences '{"MinHealthyPercentage":50,"InstanceWarmup":300}'
+
+      - name: Verify deployment
+        run: |
+          ALB_DNS=$(aws cloudformation list-exports \
+            --query "Exports[?Name=='ecommerce-dev-AlbDnsName'].Value" \
+            --output text)
+          echo "Waiting for ALB health check..."
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "http://$ALB_DNS/health" --max-time 10 || echo 0)
+            if [ "$STATUS" = "200" ]; then
+              echo "Deployment verified! App is healthy at http://$ALB_DNS"
+              exit 0
+            fi
+            echo "Attempt $i/20: status $STATUS, waiting 30s..."
+            sleep 30
+          done
+          echo "Deployment verification failed"
+          exit 1
