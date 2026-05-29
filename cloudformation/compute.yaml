@@ -15,8 +15,14 @@ Parameters:
     Type: String
     Default: main
   BastionKeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for Bastion SSH access
+    Type: String
+    Default: vockey
+    Description: EC2 Key Pair for Bastion SSH access (only used if CreateBastionHost=true)
+  CreateBastionHost:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Set to true to deploy Bastion Host. Disable for AWS Academy (ec2:RunInstances on volume/* is denied).'
   DBUsername:
     Type: String
     Default: dbadmin
@@ -60,6 +66,7 @@ Parameters:
 
 Conditions:
   UseLabProfile: !Not [!Equals [!Ref LabInstanceProfileArn, '']]
+  HasBastionHost: !Equals [!Ref CreateBastionHost, 'true']
 
 Resources:
 
@@ -283,6 +290,7 @@ Resources:
 
   BastionHost:
     Type: AWS::EC2::Instance
+    Condition: HasBastionHost
     Properties:
       InstanceType: t2.micro
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
@@ -335,8 +343,11 @@ Outputs:
       Name: !Sub '${ProjectName}-${Environment}-ScaleInPolicyArn'
 
   BastionPublicIp:
-    Description: Bastion Host Public IP
-    Value: !GetAtt BastionHost.PublicIp
+    Description: Bastion Host Public IP (N/A if CreateBastionHost=false)
+    Value: !If
+      - HasBastionHost
+      - !GetAtt BastionHost.PublicIp
+      - 'N/A'
     Export:
       Name: !Sub '${ProjectName}-${Environment}-BastionPublicIp'
 
