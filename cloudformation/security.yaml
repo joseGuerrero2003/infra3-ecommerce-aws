@@ -12,6 +12,14 @@ Parameters:
     Type: String
     Default: 0.0.0.0/0
     Description: CIDR allowed to SSH to Bastion Host
+  LabInstanceProfileArn:
+    Type: String
+    Default: ''
+    Description: 'AWS Academy only: ARN of pre-existing LabInstanceProfile. Leave empty for standard AWS accounts.'
+
+Conditions:
+  IsAcademyMode: !Not [!Equals [!Ref LabInstanceProfileArn, '']]
+  IsStandardMode: !Equals [!Ref LabInstanceProfileArn, '']
 
 Resources:
   SgALB:
@@ -90,8 +98,10 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  # Only created in non-Academy accounts (iam:CreateRole not available in Academy labs)
   EC2Role:
     Type: AWS::IAM::Role
+    Condition: IsStandardMode
     Properties:
       RoleName: !Sub '${ProjectName}-${Environment}-ec2-role'
       AssumeRolePolicyDocument:
@@ -112,6 +122,7 @@ Resources:
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    Condition: IsStandardMode
     Properties:
       InstanceProfileName: !Sub '${ProjectName}-${Environment}-ec2-profile'
       Roles:
@@ -139,11 +150,17 @@ Outputs:
       Name: !Sub '${ProjectName}-${Environment}-SgRdsId'
 
   EC2InstanceProfileArn:
-    Value: !GetAtt EC2InstanceProfile.Arn
+    Value: !If
+      - IsAcademyMode
+      - !Ref LabInstanceProfileArn
+      - !GetAtt EC2InstanceProfile.Arn
     Export:
       Name: !Sub '${ProjectName}-${Environment}-EC2InstanceProfileArn'
 
   EC2RoleArn:
-    Value: !GetAtt EC2Role.Arn
+    Value: !If
+      - IsAcademyMode
+      - !Sub 'arn:aws:iam::${AWS::AccountId}:role/LabRole'
+      - !GetAtt EC2Role.Arn
     Export:
       Name: !Sub '${ProjectName}-${Environment}-EC2RoleArn'
