@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ECommerce Compute Stack - ALB, Auto Scaling, EC2 Launch Template, Bastion'
+Description: 'ECommerce Compute Stack - ALB, App EC2 Instance'
 
 Parameters:
   Environment:
@@ -17,12 +17,12 @@ Parameters:
   BastionKeyName:
     Type: String
     Default: vockey
-    Description: EC2 Key Pair for Bastion SSH access (only used if CreateBastionHost=true)
+    Description: EC2 Key Pair for Bastion SSH access (only if CreateBastionHost=true)
   CreateBastionHost:
     Type: String
     Default: 'false'
     AllowedValues: ['true', 'false']
-    Description: 'Set to true to deploy Bastion Host. Disable for AWS Academy (ec2:RunInstances on volume/* is denied).'
+    Description: 'Set to true to deploy Bastion Host. Disable for AWS Academy.'
   DBUsername:
     Type: String
     Default: dbadmin
@@ -46,23 +46,14 @@ Parameters:
   NodeEnvironment:
     Type: String
     Default: production
-  AsgMinSize:
-    Type: Number
-    Default: 1
-  AsgMaxSize:
-    Type: Number
-    Default: 3
-  AsgDesiredSize:
-    Type: Number
-    Default: 1
   InstanceType:
     Type: String
     Default: t2.micro
-    AllowedValues: [t2.micro, t2.medium, t2.small]
+    AllowedValues: [t2.micro, t2.small, t2.medium]
   LabInstanceProfileArn:
     Type: String
     Default: ''
-    Description: 'AWS Academy only: ARN of pre-existing LabInstanceProfile. Leave empty to use IAM role from security stack.'
+    Description: 'AWS Academy: set to any non-empty value to use LabInstanceProfile by name'
 
 Conditions:
   UseLabProfile: !Not [!Equals [!Ref LabInstanceProfileArn, '']]
@@ -90,6 +81,101 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      IamInstanceProfile: !If
+        - UseLabProfile
+        - LabInstanceProfile
+        - !ImportValue
+          Fn::Sub: '${ProjectName}-${Environment}-EC2InstanceProfileArn'
+      SubnetId: !ImportValue
+        Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetAId'
+      SecurityGroupIds:
+        - !ImportValue
+          Fn::Sub: '${ProjectName}-${Environment}-SgAppId'
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            set -e
+            exec > >(tee /var/log/userdata.log) 2>&1
+            echo "=== ECommerce UserData Start ==="
+
+            dnf update -y
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            dnf install -y nodejs git nc
+            npm install -g pm2
+            dnf install -y amazon-cloudwatch-agent
+
+            mkdir -p /app
+            git clone -b "${GitHubBranch}" "${GitHubRepoUrl}" /app/ecommerce 2>/dev/null || \
+              (cd /app/ecommerce && git pull origin "${GitHubBranch}")
+
+            cd /app/ecommerce/backend
+
+            DB_HOST=$(aws ssm get-parameter \
+              --name "/${ProjectName}/${Environment}/db/endpoint" \
+              --query "Parameter.Value" --output text --region us-east-1 2>/dev/null || echo "localhost")
+
+            cat > /app/ecommerce/backend/.env <<ENVEOF
+            NODE_ENV=${NodeEnvironment}
+            PORT=${AppPort}
+            DB_HOST=$DB_HOST
+            DB_PORT=5432
+            DB_NAME=${DBName}
+            DB_USER=${DBUsername}
+            DB_PASSWORD=${DBPassword}
+            JWT_SECRET=${JwtSecret}
+            JWT_EXPIRES_IN=15m
+            JWT_REFRESH_SECRET=${JwtRefreshSecret}
+            JWT_REFRESH_EXPIRES_IN=7d
+            CORS_ORIGIN=*
+            LOG_LEVEL=info
+            AWS_REGION=us-east-1
+            CLOUDWATCH_LOG_GROUP=/ecommerce/app
+            ENVEOF
+
+            npm ci --production
+
+            echo "Waiting for DB at $DB_HOST:5432..."
+            for i in $(seq 1 30); do
+              if nc -z "$DB_HOST" 5432 2>/dev/null; then
+                echo "DB reachable at $DB_HOST"; break
+              fi
+              echo "Attempt $i/30 - waiting 10s..."
+              sleep 10
+            done
+
+            npx sequelize-cli db:migrate --env production
+
+            SEED_COUNT=$(node -e "
+            require('dotenv').config();
+            const {Product}=require('./src/models');
+            Product.count().then(c=>{process.stdout.write(String(c));process.exit(0);}).catch(()=>{process.stdout.write('0');process.exit(0);});
+            " 2>/dev/null || echo "0")
+
+            if [ "$SEED_COUNT" = "0" ]; then
+              echo "Seeding database..."
+              npx sequelize-cli db:seed:all --env production
+            else
+              echo "DB already seeded ($SEED_COUNT products), skipping."
+            fi
+
+            mkdir -p /var/log/pm2
+            pm2 start ecosystem.config.js --env production
+            env PATH=$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user | bash || true
+            pm2 save
+
+            echo "=== ECommerce UserData Complete ==="
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-app'
+        - Key: Project
+          Value: !Ref ProjectName
+
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -99,6 +185,9 @@ Resources:
       VpcId: !ImportValue
         Fn::Sub: '${ProjectName}-${Environment}-VpcId'
       TargetType: instance
+      Targets:
+        - Id: !Ref AppInstance
+          Port: !Ref AppPort
       HealthCheckPath: /health
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 10
@@ -120,184 +209,16 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
 
-  LaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-${Environment}-lt'
-      LaunchTemplateData:
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
-        InstanceType: !Ref InstanceType
-        IamInstanceProfile:
-          Arn: !If
-            - UseLabProfile
-            - !Ref AWS::NoValue
-            - !ImportValue
-              Fn::Sub: '${ProjectName}-${Environment}-EC2InstanceProfileArn'
-          Name: !If
-            - UseLabProfile
-            - LabInstanceProfile
-            - !Ref AWS::NoValue
-        SecurityGroupIds:
-          - !ImportValue
-            Fn::Sub: '${ProjectName}-${Environment}-SgAppId'
-        UserData:
-          Fn::Base64:
-            !Sub |
-              #!/bin/bash
-              set -e
-              exec > >(tee /var/log/userdata.log) 2>&1
-              echo "=== ECommerce UserData Start ==="
-
-              dnf update -y
-              curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-              dnf install -y nodejs git nc
-              npm install -g pm2
-              dnf install -y amazon-cloudwatch-agent
-
-              mkdir -p /app
-              REPO_URL="${GitHubRepoUrl}"
-              BRANCH="${GitHubBranch}"
-              if [ -d "/app/ecommerce/.git" ]; then
-                cd /app/ecommerce && git pull origin "$BRANCH"
-              else
-                git clone -b "$BRANCH" "$REPO_URL" /app/ecommerce
-              fi
-
-              cd /app/ecommerce/backend
-
-              DB_HOST=$(aws ssm get-parameter \
-                --name "/${ProjectName}/${Environment}/db/endpoint" \
-                --query "Parameter.Value" --output text --region us-east-1 2>/dev/null || echo "localhost")
-
-              cat > /app/ecommerce/backend/.env << ENVEOF
-              NODE_ENV=${NodeEnvironment}
-              PORT=${AppPort}
-              DB_HOST=$DB_HOST
-              DB_PORT=5432
-              DB_NAME=${DBName}
-              DB_USER=${DBUsername}
-              DB_PASSWORD=${DBPassword}
-              JWT_SECRET=${JwtSecret}
-              JWT_EXPIRES_IN=15m
-              JWT_REFRESH_SECRET=${JwtRefreshSecret}
-              JWT_REFRESH_EXPIRES_IN=7d
-              CORS_ORIGIN=*
-              LOG_LEVEL=info
-              AWS_REGION=us-east-1
-              CLOUDWATCH_LOG_GROUP=/ecommerce/app
-              ENVEOF
-
-              npm ci --production
-
-              echo "Waiting for database at $DB_HOST:5432..."
-              for i in $(seq 1 30); do
-                if nc -z "$DB_HOST" 5432 2>/dev/null; then
-                  echo "DB reachable"; break
-                fi
-                echo "Attempt $i/30 - waiting 10s..."
-                sleep 10
-              done
-
-              npx sequelize-cli db:migrate --env production
-
-              SEED_COUNT=$(node -e "require('dotenv').config(); const {Product}=require('./src/models'); Product.count().then(c=>{process.stdout.write(String(c));process.exit(0);}).catch(()=>{process.stdout.write('0');process.exit(0);})" 2>/dev/null || echo "0")
-              if [ "$SEED_COUNT" = "0" ]; then
-                echo "Seeding database..."
-                npx sequelize-cli db:seed:all --env production
-              else
-                echo "DB already seeded ($SEED_COUNT products), skipping."
-              fi
-
-              mkdir -p /var/log/pm2
-              pm2 start ecosystem.config.js --env production
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user | bash || true
-              pm2 save
-
-              cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWEOF'
-              {
-                "logs": {
-                  "logs_collected": {
-                    "files": {
-                      "collect_list": [
-                        {"file_path":"/var/log/pm2/ecommerce-out.log","log_group_name":"/ecommerce/app","log_stream_name":"{instance_id}/out"},
-                        {"file_path":"/var/log/pm2/ecommerce-error.log","log_group_name":"/ecommerce/app","log_stream_name":"{instance_id}/error"},
-                        {"file_path":"/var/log/userdata.log","log_group_name":"/ecommerce/system","log_stream_name":"{instance_id}/userdata"}
-                      ]
-                    }
-                  }
-                }
-              }
-              CWEOF
-
-              systemctl start amazon-cloudwatch-agent
-              systemctl enable amazon-cloudwatch-agent
-              echo "=== ECommerce UserData Complete ==="
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub '${ProjectName}-${Environment}-app'
-              - Key: Project
-                Value: !Ref ProjectName
-
-  AppAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: ALBListener
-    Properties:
-      AutoScalingGroupName: !Sub '${ProjectName}-${Environment}-asg'
-      LaunchTemplate:
-        LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: !Ref AsgMinSize
-      MaxSize: !Ref AsgMaxSize
-      DesiredCapacity: !Ref AsgDesiredSize
-      VPCZoneIdentifier:
-        - !ImportValue
-          Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetAId'
-        - !ImportValue
-          Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetBId'
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-asg-instance'
-          PropagateAtLaunch: true
-        - Key: Project
-          Value: !Ref ProjectName
-          PropagateAtLaunch: true
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: 1
-        MaxBatchSize: 1
-        PauseTime: PT5M
-        WaitOnResourceSignals: false
-
-  ScaleOutPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref AppAutoScalingGroup
-      PolicyType: SimpleScaling
-      AdjustmentType: ChangeInCapacity
-      ScalingAdjustment: 1
-      Cooldown: 300
-
-  ScaleInPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref AppAutoScalingGroup
-      PolicyType: SimpleScaling
-      AdjustmentType: ChangeInCapacity
-      ScalingAdjustment: -1
-      Cooldown: 300
-
   BastionHost:
     Type: AWS::EC2::Instance
     Condition: HasBastionHost
     Properties:
       InstanceType: t2.micro
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      IamInstanceProfile: !If
+        - UseLabProfile
+        - LabInstanceProfile
+        - !Ref AWS::NoValue
       KeyName: !Ref BastionKeyName
       SubnetId: !ImportValue
         Fn::Sub: '${ProjectName}-${Environment}-PublicSubnetAId'
@@ -328,23 +249,11 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-${Environment}-AlbArn'
 
-  AsgName:
-    Description: Auto Scaling Group Name
-    Value: !Ref AppAutoScalingGroup
+  AppInstanceId:
+    Description: App EC2 Instance ID
+    Value: !Ref AppInstance
     Export:
-      Name: !Sub '${ProjectName}-${Environment}-AsgName'
-
-  ScaleOutPolicyArn:
-    Description: Scale Out Policy ARN
-    Value: !Ref ScaleOutPolicy
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-ScaleOutPolicyArn'
-
-  ScaleInPolicyArn:
-    Description: Scale In Policy ARN
-    Value: !Ref ScaleInPolicy
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-ScaleInPolicyArn'
+      Name: !Sub '${ProjectName}-${Environment}-AppInstanceId'
 
   BastionPublicIp:
     Description: Bastion Host Public IP (N/A if CreateBastionHost=false)

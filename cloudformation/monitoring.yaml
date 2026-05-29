@@ -46,7 +46,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-high-cpu'
-      AlarmDescription: Scale out when CPU > 60% for 2 consecutive periods
+      AlarmDescription: Alert when app instance CPU > 60% for 2 consecutive periods
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -55,12 +55,10 @@ Resources:
       Threshold: 60
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: AutoScalingGroupName
+        - Name: InstanceId
           Value: !ImportValue
-            Fn::Sub: '${ProjectName}-${Environment}-AsgName'
+            Fn::Sub: '${ProjectName}-${Environment}-AppInstanceId'
       AlarmActions:
-        - !ImportValue
-          Fn::Sub: '${ProjectName}-${Environment}-ScaleOutPolicyArn'
         - !Ref SNSTopic
       OKActions:
         - !Ref SNSTopic
@@ -70,21 +68,20 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-low-cpu'
-      AlarmDescription: Scale in when CPU < 30% for 5 consecutive periods
+      AlarmDescription: Alert when app instance CPU < 10% for 5 consecutive periods
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
       Period: 60
       EvaluationPeriods: 5
-      Threshold: 30
+      Threshold: 10
       ComparisonOperator: LessThanThreshold
       Dimensions:
-        - Name: AutoScalingGroupName
+        - Name: InstanceId
           Value: !ImportValue
-            Fn::Sub: '${ProjectName}-${Environment}-AsgName'
+            Fn::Sub: '${ProjectName}-${Environment}-AppInstanceId'
       AlarmActions:
-        - !ImportValue
-          Fn::Sub: '${ProjectName}-${Environment}-ScaleInPolicyArn'
+        - !Ref SNSTopic
       TreatMissingData: notBreaching
 
   ALB5xxAlarm:
