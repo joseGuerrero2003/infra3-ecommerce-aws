@@ -44,7 +44,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db'
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: '15.7'
+      EngineVersion: '16.4'
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       DBName: !Ref DBName
