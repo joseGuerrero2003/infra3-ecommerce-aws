@@ -88,7 +88,7 @@ Resources:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
       IamInstanceProfile: !If
         - UseLabProfile
-        - LabInstanceProfile
+        - !Ref LabInstanceProfileArn
         - !ImportValue
           Fn::Sub: '${ProjectName}-${Environment}-EC2InstanceProfileArn'
       SubnetId: !ImportValue
