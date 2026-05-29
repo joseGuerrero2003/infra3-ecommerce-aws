@@ -20,6 +20,10 @@ Parameters:
   DBName:
     Type: String
     Default: ecommerce
+  DBEngineVersion:
+    Type: String
+    Default: '16.4'
+    Description: 'PostgreSQL engine version. Check available versions in RDS console before deploying.'
 
 Resources:
   DBSubnetGroup:
@@ -44,7 +48,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db'
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: '16.4'
+      EngineVersion: !Ref DBEngineVersion
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       DBName: !Ref DBName
