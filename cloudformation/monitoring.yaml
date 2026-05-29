@@ -151,75 +151,9 @@ Resources:
         - !Ref SNSTopic
       TreatMissingData: notBreaching
 
-  CloudTrailBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-cloudtrail-${AWS::AccountId}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-
-  CloudTrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CloudTrailBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailBucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub '${ProjectName}-${Environment}-trail'
-      S3BucketName: !Ref CloudTrailBucket
-      IsLogging: true
-      IsMultiRegionTrail: false
-      EnableLogFileValidation: true
-      IncludeGlobalServiceEvents: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
 Outputs:
   SnsTopicArn:
     Description: SNS Topic ARN for alerts
     Value: !Ref SNSTopic
     Export:
       Name: !Sub '${ProjectName}-${Environment}-SnsTopicArn'
-
-  CloudTrailArn:
-    Description: CloudTrail ARN
-    Value: !GetAtt CloudTrail.Arn
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-CloudTrailArn'
