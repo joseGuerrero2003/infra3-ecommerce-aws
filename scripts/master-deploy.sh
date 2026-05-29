@@ -3,16 +3,16 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-CFN_DIR="$PROJECT_ROOT/cloudformation"
-
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 log_info()  { echo -e "${BLUE}[INFO]${NC}  $1"; }
 log_ok()    { echo -e "${GREEN}[OK]${NC}    $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+CFN_DIR="$PROJECT_ROOT/cloudformation"
 
 usage() {
   cat <<EOF
@@ -25,9 +25,6 @@ Options:
   --region      AWS Region                      [default: us-east-1]
   --skip-to     Start from a specific stack     (network|security|database|compute|monitoring)
   --help        Show this help
-
-Example:
-  $0 --env dev --params cloudformation/parameters/dev.json
 EOF
   exit 0
 }
@@ -52,47 +49,82 @@ done
 
 [ ! -f "$PARAMS_FILE" ] && log_error "Parameters file not found: $PARAMS_FILE"
 
+# Filter params from the JSON file to only include params declared in the template.
+# CloudFormation rejects unknown parameters — this prevents ValidationError.
+filter_params() {
+  local template="$1"
+  local params_file="$2"
+
+  python3 - "$template" "$params_file" <<'PYEOF'
+import json, re, sys
+
+template_path, params_path = sys.argv[1], sys.argv[2]
+
+with open(template_path) as f:
+    content = f.read()
+
+# Extract only keys directly under the Parameters: top-level section
+m = re.search(r'^Parameters:\n((?:  [A-Za-z]\w+:\s*\n(?:    [^\n]*\n)*)*)', content, re.MULTILINE)
+declared = set()
+if m:
+    declared = set(re.findall(r'^  ([A-Za-z]\w+):', m.group(0), re.MULTILINE))
+
+with open(params_path) as f:
+    all_params = json.load(f)
+
+filtered = [p for p in all_params if p['ParameterKey'] in declared]
+print(' '.join(f"{p['ParameterKey']}={p['ParameterValue']}" for p in filtered))
+PYEOF
+}
+
 deploy_stack() {
   local STACK_NAME="$1"
   local TEMPLATE="$2"
-  local EXTRA_PARAMS="${3:-}"
 
   log_info "Deploying stack: $STACK_NAME"
 
   local PARAMS
-  PARAMS=$(jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' "$PARAMS_FILE" | tr '\n' ' ')
+  PARAMS=$(filter_params "$TEMPLATE" "$PARAMS_FILE")
 
-  local CMD="aws cloudformation deploy \
-    --stack-name $STACK_NAME \
-    --template-file $TEMPLATE \
-    --parameter-overrides $PARAMS $EXTRA_PARAMS \
+  aws cloudformation deploy \
+    --stack-name "$STACK_NAME" \
+    --template-file "$TEMPLATE" \
+    --parameter-overrides $PARAMS \
     --capabilities CAPABILITY_NAMED_IAM \
-    --region $REGION \
-    --no-fail-on-empty-changeset"
+    --region "$REGION" \
+    --no-fail-on-empty-changeset
 
-  if eval "$CMD"; then
-    log_ok "Stack deployed: $STACK_NAME"
-  else
-    log_error "Failed to deploy: $STACK_NAME"
-  fi
+  log_ok "Stack deployed: $STACK_NAME"
 }
 
 wait_for_stack() {
   local STACK_NAME="$1"
-  log_info "Waiting for stack: $STACK_NAME"
-  aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
-    || aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null \
-    || true
+  log_info "Waiting for stack to settle: $STACK_NAME"
+  local STATUS
+  for i in $(seq 1 60); do
+    STATUS=$(aws cloudformation describe-stacks \
+      --stack-name "$STACK_NAME" \
+      --region "$REGION" \
+      --query 'Stacks[0].StackStatus' \
+      --output text 2>/dev/null || echo "NOT_FOUND")
+
+    case "$STATUS" in
+      *COMPLETE)   log_ok "Stack $STACK_NAME: $STATUS"; return 0 ;;
+      *FAILED)     log_error "Stack $STACK_NAME FAILED: $STATUS" ;;
+      *IN_PROGRESS) echo "  Status: $STATUS — waiting 20s... ($i/60)"; sleep 20 ;;
+      NOT_FOUND)   log_error "Stack $STACK_NAME not found" ;;
+      *)           echo "  Status: $STATUS — waiting 20s..."; sleep 20 ;;
+    esac
+  done
+  log_error "Timeout waiting for stack $STACK_NAME"
 }
 
 get_output() {
-  local STACK_NAME="$1"
-  local KEY="$2"
   aws cloudformation describe-stacks \
-    --stack-name "$STACK_NAME" \
+    --stack-name "$1" \
     --region "$REGION" \
-    --query "Stacks[0].Outputs[?OutputKey=='$KEY'].OutputValue" \
-    --output text
+    --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" \
+    --output text 2>/dev/null || echo ""
 }
 
 echo ""
@@ -104,21 +136,20 @@ echo "  Parameters: $PARAMS_FILE"
 echo "=============================================="
 echo ""
 
-# Check AWS credentials
-aws sts get-caller-identity --region "$REGION" > /dev/null 2>&1 || log_error "AWS credentials not configured or expired"
+# Verify credentials
+aws sts get-caller-identity --region "$REGION" > /dev/null 2>&1 \
+  || log_error "AWS credentials not configured or expired"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 log_ok "AWS Account: $ACCOUNT_ID"
 
-# Check jq is available
-command -v jq > /dev/null 2>&1 || log_error "jq is required. Install: sudo yum install -y jq or brew install jq"
+command -v jq > /dev/null 2>&1 || log_error "jq is required. Install: sudo yum install -y jq"
+command -v python3 > /dev/null 2>&1 || log_error "python3 is required (for parameter filtering)"
 
 STACKS_ORDER=(network security database compute monitoring)
 START=0
 if [ -n "$SKIP_TO" ]; then
   for i in "${!STACKS_ORDER[@]}"; do
-    if [ "${STACKS_ORDER[$i]}" = "$SKIP_TO" ]; then
-      START=$i; break
-    fi
+    [ "${STACKS_ORDER[$i]}" = "$SKIP_TO" ] && START=$i && break
   done
 fi
 
@@ -131,22 +162,21 @@ for ((i=START; i<${#STACKS_ORDER[@]}; i++)); do
 
   deploy_stack "$STACK_FULL_NAME" "$TEMPLATE"
   wait_for_stack "$STACK_FULL_NAME"
-  log_ok "Stack $STACK complete"
   echo ""
 done
 
-# Print final outputs
+ALB_DNS=$(get_output "${PROJECT}-${ENV}-compute" "AlbDnsName")
+BASTION_IP=$(get_output "${PROJECT}-${ENV}-compute" "BastionPublicIp")
+
 echo "=============================================="
 echo "  Deployment Complete"
 echo "=============================================="
-ALB_DNS=$(get_output "${PROJECT}-${ENV}-compute" "AlbDnsName" 2>/dev/null || echo "N/A")
-BASTION_IP=$(get_output "${PROJECT}-${ENV}-compute" "BastionPublicIp" 2>/dev/null || echo "N/A")
-echo ""
-log_ok "Application URL:  http://$ALB_DNS"
-log_ok "Bastion Host IP:  $BASTION_IP"
+[ -n "$ALB_DNS" ] && log_ok "Application URL:  http://$ALB_DNS"
+[ -n "$BASTION_IP" ] && log_ok "Bastion Host IP:  $BASTION_IP"
 echo ""
 echo "Next steps:"
 echo "  1. Confirm SNS email subscription (check your inbox)"
-echo "  2. Access the app: http://$ALB_DNS"
-echo "  3. Admin login: admin@ecommerce.com / Admin123!"
+echo "  2. Wait 5-10 min for EC2 UserData to finish"
+echo "  3. Access the app: http://$ALB_DNS"
+echo "  4. Run: ./scripts/healthcheck.sh http://$ALB_DNS"
 echo ""
