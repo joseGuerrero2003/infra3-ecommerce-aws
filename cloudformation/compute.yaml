@@ -86,6 +86,13 @@ Resources:
       InstanceType: !Ref InstanceType
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
       IamInstanceProfile: !Ref LabInstanceProfileArn
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
       SubnetId: !ImportValue
         Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetAId'
       SecurityGroupIds:
