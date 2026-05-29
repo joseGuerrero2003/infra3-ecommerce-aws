@@ -130,9 +130,13 @@ Resources:
         IamInstanceProfile:
           Arn: !If
             - UseLabProfile
-            - !Ref LabInstanceProfileArn
+            - !Ref AWS::NoValue
             - !ImportValue
               Fn::Sub: '${ProjectName}-${Environment}-EC2InstanceProfileArn'
+          Name: !If
+            - UseLabProfile
+            - LabInstanceProfile
+            - !Ref AWS::NoValue
         SecurityGroupIds:
           - !ImportValue
             Fn::Sub: '${ProjectName}-${Environment}-SgAppId'
