@@ -52,11 +52,10 @@ Parameters:
     AllowedValues: [t2.micro, t2.small, t2.medium]
   LabInstanceProfileArn:
     Type: String
-    Default: ''
-    Description: 'AWS Academy: set to any non-empty value to use LabInstanceProfile by name'
+    Default: 'c203071a5182623l15328841t1w665714566988-SsmRoleInstanceProfile-E09LKNddhqyP'
+    Description: 'IAM Instance Profile name for EC2. AWS Academy: use SsmRoleInstanceProfile name.'
 
 Conditions:
-  UseLabProfile: !Not [!Equals [!Ref LabInstanceProfileArn, '']]
   HasBastionHost: !Equals [!Ref CreateBastionHost, 'true']
 
 Resources:
@@ -86,11 +85,7 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
-      IamInstanceProfile: !If
-        - UseLabProfile
-        - !Ref LabInstanceProfileArn
-        - !ImportValue
-          Fn::Sub: '${ProjectName}-${Environment}-EC2InstanceProfileArn'
+      IamInstanceProfile: !Ref LabInstanceProfileArn
       SubnetId: !ImportValue
         Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetAId'
       SecurityGroupIds:
@@ -215,10 +210,7 @@ Resources:
     Properties:
       InstanceType: t2.micro
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
-      IamInstanceProfile: !If
-        - UseLabProfile
-        - LabInstanceProfile
-        - !Ref AWS::NoValue
+      IamInstanceProfile: !Ref LabInstanceProfileArn
       KeyName: !Ref BastionKeyName
       SubnetId: !ImportValue
         Fn::Sub: '${ProjectName}-${Environment}-PublicSubnetAId'
