@@ -28,6 +28,7 @@ Parameters:
 
 Conditions:
   HasBastionHost: !Equals [!Ref CreateBastionHost, 'true']
+  HasInstance: !Not [!Equals [!Ref AppInstanceId, '']]
 
 Resources:
 
@@ -120,7 +121,7 @@ Outputs:
 
   AppInstanceId:
     Description: App EC2 Instance ID
-    Value: !Ref AppInstanceId
+    Value: !If [HasInstance, !Ref AppInstanceId, 'none']
     Export:
       Name: !Sub '${ProjectName}-${Environment}-AppInstanceId'
 
