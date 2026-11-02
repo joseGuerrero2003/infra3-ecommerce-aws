@@ -46,8 +46,9 @@ Parameters:
     Default: production
   InstanceType:
     Type: String
-    Default: t2.micro
-    AllowedValues: [t2.micro, t2.small, t2.medium, t3.micro, t3.small]
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t2.micro, t2.small, t2.medium, t4g.micro]
+    Description: 't3.micro es elegible para el plan gratuito actual; t2.micro ya no lo es en todas las regiones'
   InstanceProfileName:
     Type: String
     Default: LabInstanceProfile

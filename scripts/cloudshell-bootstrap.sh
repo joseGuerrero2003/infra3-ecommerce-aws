@@ -180,7 +180,7 @@ cat > "$PARAMS_FILE" <<JSONEOF
   { "ParameterKey": "NotificationEmail",     "ParameterValue": "joseguerrero1912cali@gmail.com" },
   { "ParameterKey": "AppPort",               "ParameterValue": "3000" },
   { "ParameterKey": "NodeEnvironment",       "ParameterValue": "production" },
-  { "ParameterKey": "InstanceType",          "ParameterValue": "t2.micro" },
+  { "ParameterKey": "InstanceType",          "ParameterValue": "${INSTANCE_TYPE:-t3.micro}" },
   { "ParameterKey": "AsgMinSize",            "ParameterValue": "1" },
   { "ParameterKey": "AsgMaxSize",            "ParameterValue": "3" },
   { "ParameterKey": "AsgDesiredSize",        "ParameterValue": "2" },
