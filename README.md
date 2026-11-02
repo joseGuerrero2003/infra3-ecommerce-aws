@@ -14,7 +14,7 @@ Aplicación de comercio electrónico (Node.js/Express + PostgreSQL) desplegada e
 
 - **Infraestructura como código modular:** 5 stacks de CloudFormation desacoplados mediante *exports/imports* (red, seguridad, base de datos, cómputo y monitoreo).
 - **Red segmentada:** VPC con subredes públicas y privadas en dos zonas de disponibilidad, Internet Gateway, NAT Gateway y Bastion Host opcional.
-- **Alta disponibilidad en la capa de aplicación:** Auto Scaling Group con Launch Template, una instancia por zona de disponibilidad y escalamiento automático por CPU (target tracking, 1 a 3 instancias) detrás del Application Load Balancer.
+- **Alta disponibilidad en la capa de aplicación:** Auto Scaling Group con Launch Template, una instancia por zona de disponibilidad y escalamiento automático por CPU (target tracking, mínimo 2 y máximo 3 instancias) detrás del Application Load Balancer.
 - **Base de datos gestionada:** PostgreSQL 15 en Amazon RDS, ubicada en subredes privadas y accesible solo desde la capa de aplicación.
 - **Observabilidad:** alarmas de CloudWatch (CPU de EC2 y RDS, errores 5XX y latencia del ALB), notificaciones por SNS y grupos de logs.
 - **CI/CD:** cada push y pull request ejecuta las pruebas del backend (Jest + Supertest) contra un PostgreSQL efímero y valida los templates; el despliegue actualiza el stack y reemplaza las instancias sin cortar el servicio (*instance refresh*).
@@ -36,7 +36,7 @@ Aplicación de comercio electrónico (Node.js/Express + PostgreSQL) desplegada e
 │                │                                         │
 │  Subredes privadas (10.0.10.0/24, 10.0.20.0/24)          │
 │   ┌────────────▼─────────────────────────────┐           │
-│   │ Auto Scaling Group (1–3, target CPU 50%) │           │
+│   │ Auto Scaling Group (2–3, target CPU 50%) │           │
 │   │  EC2 AZ-a          EC2 AZ-b              │           │
 │   │  Node.js + PM2     Node.js + PM2         │           │
 │   └────────────┬─────────────────────────────┘           │

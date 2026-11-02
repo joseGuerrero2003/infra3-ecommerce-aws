@@ -181,7 +181,7 @@ cat > "$PARAMS_FILE" <<JSONEOF
   { "ParameterKey": "AppPort",               "ParameterValue": "3000" },
   { "ParameterKey": "NodeEnvironment",       "ParameterValue": "production" },
   { "ParameterKey": "InstanceType",          "ParameterValue": "${INSTANCE_TYPE:-t3.micro}" },
-  { "ParameterKey": "AsgMinSize",            "ParameterValue": "1" },
+  { "ParameterKey": "AsgMinSize",            "ParameterValue": "2" },
   { "ParameterKey": "AsgMaxSize",            "ParameterValue": "3" },
   { "ParameterKey": "AsgDesiredSize",        "ParameterValue": "2" },
   { "ParameterKey": "LabInstanceProfileArn", "ParameterValue": "$LAB_PROFILE_ARN" },

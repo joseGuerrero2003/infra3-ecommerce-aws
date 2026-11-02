@@ -55,7 +55,8 @@ Parameters:
     Description: 'Existing instance profile for app instances (AWS Academy does not allow creating IAM roles)'
   AsgMinSize:
     Type: Number
-    Default: 1
+    Default: 2
+    Description: 'Mínimo 2 = siempre una instancia por zona de disponibilidad (target tracking no baja de aquí)'
   AsgMaxSize:
     Type: Number
     Default: 3
