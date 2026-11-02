@@ -130,11 +130,12 @@ if [ -z "$INSTANCE_PROFILE_NAME" ]; then
   [ "$INSTANCE_PROFILE_NAME" = "None" ] && INSTANCE_PROFILE_NAME=""
 fi
 if [ -z "$INSTANCE_PROFILE_NAME" ]; then
-  log_info "Perfiles de instancia disponibles en la cuenta:"
-  aws iam list-instance-profiles --query 'InstanceProfiles[].InstanceProfileName' --output table 2>/dev/null || true
-  log_error "No se detectó un perfil de instancia. Ejecuta: export INSTANCE_PROFILE_NAME=<nombre> y vuelve a correr el script"
+  # Cuenta AWS estándar: el stack de seguridad crea el rol y el perfil
+  INSTANCE_PROFILE_NAME="${PROJECT}-${ENV}-ec2-profile"
+  STANDARD_ACCOUNT=true
+  log_info "Cuenta estándar: security.yaml creará el perfil $INSTANCE_PROFILE_NAME"
 fi
-if [ -z "$LAB_PROFILE_ARN" ]; then
+if [ -z "$LAB_PROFILE_ARN" ] && [ "${STANDARD_ACCOUNT:-false}" != "true" ]; then
   LAB_PROFILE_ARN=$(aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE_NAME" \
     --query 'InstanceProfile.Arn' --output text 2>/dev/null || echo "")
 fi
