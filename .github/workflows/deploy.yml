@@ -1,16 +1,17 @@
 name: Deploy
 
+# Despliegue manual: las credenciales del sandbox de AWS Academy expiran,
+# así que se ejecuta desde Actions > Deploy > Run workflow con una sesión activa.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   validate:
     name: Validate & Test
     uses: ./.github/workflows/validate.yml
 
-  deploy-infrastructure:
-    name: Deploy CloudFormation
+  deploy:
+    name: Deploy to AWS
     runs-on: ubuntu-latest
     needs: validate
     environment: production
@@ -26,7 +27,14 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      - name: Deploy compute stack (rolling update)
+      - name: Validate CloudFormation templates
+        run: |
+          for t in cloudformation/*.yaml; do
+            echo "Validating $t"
+            aws cloudformation validate-template --template-body "file://$t" > /dev/null
+          done
+
+      - name: Deploy compute stack
         run: |
           aws cloudformation deploy \
             --stack-name ecommerce-dev-compute \
@@ -34,25 +42,31 @@ jobs:
             --parameter-overrides \
               Environment=dev \
               ProjectName=ecommerce \
-              GitHubRepoUrl=${{ secrets.GITHUB_REPO_URL }} \
-              GitHubBranch=main \
-              BastionKeyName=${{ secrets.BASTION_KEY_NAME }} \
-              DBUsername=${{ secrets.DB_USERNAME }} \
-              DBPassword=${{ secrets.DB_PASSWORD }} \
-              DBName=ecommerce \
-              JwtSecret=${{ secrets.JWT_SECRET }} \
-              JwtRefreshSecret=${{ secrets.JWT_REFRESH_SECRET }} \
-            --capabilities CAPABILITY_NAMED_IAM \
+              AppInstanceId=${{ secrets.APP_INSTANCE_ID }} \
             --no-fail-on-empty-changeset
 
-      - name: Trigger instance refresh
+      - name: Deploy application code (SSM Run Command)
         run: |
-          ASG_NAME=$(aws cloudformation list-exports \
-            --query "Exports[?Name=='ecommerce-dev-AsgName'].Value" \
-            --output text)
-          aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name "$ASG_NAME" \
-            --preferences '{"MinHealthyPercentage":50,"InstanceWarmup":300}'
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ secrets.APP_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "GitHub Actions deploy ${{ github.sha }}" \
+            --parameters 'commands=["bash /app/ecommerce/scripts/deploy.sh"]' \
+            --query "Command.CommandId" --output text)
+          echo "SSM command: $CMD_ID"
+          aws ssm wait command-executed \
+            --command-id "$CMD_ID" \
+            --instance-id "${{ secrets.APP_INSTANCE_ID }}" || true
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$CMD_ID" \
+            --instance-id "${{ secrets.APP_INSTANCE_ID }}" \
+            --query "Status" --output text)
+          echo "Status: $STATUS"
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" \
+            --instance-id "${{ secrets.APP_INSTANCE_ID }}" \
+            --query "StandardOutputContent" --output text | tail -30
+          [ "$STATUS" = "Success" ]
 
       - name: Verify deployment
         run: |
