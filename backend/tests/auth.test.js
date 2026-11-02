@@ -14,9 +14,9 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
-  await CartItem.destroy({ where: {}, truncate: true }).catch(() => {});
-  await Cart.destroy({ where: {}, truncate: true });
-  await User.destroy({ where: {}, truncate: true });
+  await CartItem.destroy({ where: {}, truncate: true, cascade: true }).catch(() => {});
+  await Cart.destroy({ where: {}, truncate: true, cascade: true });
+  await User.destroy({ where: {}, truncate: true, cascade: true });
 });
 
 describe('POST /api/auth/register', () => {
