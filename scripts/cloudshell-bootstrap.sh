@@ -201,7 +201,8 @@ else
   log_error "JSON inválido en $PARAMS_FILE"
 fi
 
-PLACEHOLDER_COUNT=$(grep -c "CHANGE_ME\|YOUR_USER\|ACADEMY_AUTO_DETECT" "$PARAMS_FILE" 2>/dev/null || echo "0")
+PLACEHOLDER_COUNT=$(grep -c "CHANGE_ME\|YOUR_USER\|ACADEMY_AUTO_DETECT" "$PARAMS_FILE" 2>/dev/null || true)
+PLACEHOLDER_COUNT=${PLACEHOLDER_COUNT:-0}
 if [ "$PLACEHOLDER_COUNT" -gt 0 ]; then
   log_error "Aún hay $PLACEHOLDER_COUNT placeholders sin reemplazar en my-dev.json"
 fi
