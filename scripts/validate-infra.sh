@@ -7,7 +7,7 @@ PASS=0; FAIL=0
 
 ENV="${ENV:-dev}"
 PROJECT="${PROJECT:-ecommerce}"
-REGION="${REGION:-us-east-1}"
+REGION="${REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}}"
 
 check() {
   local name="$1"; local cmd="$2"

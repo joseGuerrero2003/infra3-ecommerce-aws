@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ECommerce Network Stack - VPC, Subnets, IGW, NAT, Route Tables'
+Description: 'ECommerce Network Stack - VPC, Subnets, IGW, optional NAT, Route Tables'
 
 Parameters:
   Environment:
@@ -9,6 +9,14 @@ Parameters:
   ProjectName:
     Type: String
     Default: ecommerce
+  EnableNatGateway:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: "false = sin NAT Gateway (cuentas que no lo soportan); las instancias de app van en subredes públicas"
+
+Conditions:
+  HasNatGateway: !Equals [!Ref EnableNatGateway, 'true']
 
 Resources:
   VPC:
@@ -120,6 +128,7 @@ Resources:
 
   NATGatewayEIP:
     Type: AWS::EC2::EIP
+    Condition: HasNatGateway
     DependsOn: VPCGatewayAttachment
     Properties:
       Domain: vpc
@@ -129,6 +138,7 @@ Resources:
 
   NATGateway:
     Type: AWS::EC2::NatGateway
+    Condition: HasNatGateway
     Properties:
       AllocationId: !GetAtt NATGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnetA
@@ -146,6 +156,7 @@ Resources:
 
   PrivateRoute:
     Type: AWS::EC2::Route
+    Condition: HasNatGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0

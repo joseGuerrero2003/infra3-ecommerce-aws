@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 CFN_DIR="$PROJECT_ROOT/cloudformation"
 PARAMS_FILE="$PROJECT_ROOT/cloudformation/parameters/my-dev.json"
-REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 PROJECT="ecommerce"
 ENV="dev"
 
@@ -40,7 +40,8 @@ log_ok "User ARN:   $USER_ARN"
 
 echo ""
 echo -e "${BOLD}--- Región activa ---${NC}"
-REGION=$(aws configure get region 2>/dev/null || echo "us-east-1")
+REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null)}}"
+REGION="${REGION:-us-east-1}"
 log_ok "Región: $REGION"
 export AWS_DEFAULT_REGION="$REGION"
 
@@ -154,6 +155,14 @@ DB_PASS=$(python3 -c "import secrets,string; \
 JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 JWT_REFRESH=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 
+# Modo de red: NO_NAT=true para cuentas sin NAT Gateway (p. ej. el registro nuevo de AWS)
+if [ "${NO_NAT:-false}" = "true" ]; then
+  ENABLE_NAT="false"; APP_SUBNET_TYPE="public"
+  log_info "Modo sin NAT Gateway: instancias de app en subredes públicas (SG solo acepta tráfico del ALB)"
+else
+  ENABLE_NAT="true"; APP_SUBNET_TYPE="private"
+fi
+
 # Build my-dev.json
 cat > "$PARAMS_FILE" <<JSONEOF
 [
@@ -176,7 +185,9 @@ cat > "$PARAMS_FILE" <<JSONEOF
   { "ParameterKey": "AsgMaxSize",            "ParameterValue": "3" },
   { "ParameterKey": "AsgDesiredSize",        "ParameterValue": "2" },
   { "ParameterKey": "LabInstanceProfileArn", "ParameterValue": "$LAB_PROFILE_ARN" },
-  { "ParameterKey": "InstanceProfileName",   "ParameterValue": "$INSTANCE_PROFILE_NAME" }
+  { "ParameterKey": "InstanceProfileName",   "ParameterValue": "$INSTANCE_PROFILE_NAME" },
+  { "ParameterKey": "EnableNatGateway",      "ParameterValue": "$ENABLE_NAT" },
+  { "ParameterKey": "AppSubnetType",         "ParameterValue": "$APP_SUBNET_TYPE" }
 ]
 JSONEOF
 

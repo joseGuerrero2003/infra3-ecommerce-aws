@@ -18,5 +18,7 @@
   { "ParameterKey": "AsgMaxSize",             "ParameterValue": "3" },
   { "ParameterKey": "AsgDesiredSize",         "ParameterValue": "2" },
   { "ParameterKey": "LabInstanceProfileArn",  "ParameterValue": "ACADEMY_AUTO_DETECT" },
-  { "ParameterKey": "InstanceProfileName",    "ParameterValue": "ACADEMY_AUTO_DETECT" }
+  { "ParameterKey": "InstanceProfileName",    "ParameterValue": "ACADEMY_AUTO_DETECT" },
+  { "ParameterKey": "EnableNatGateway",       "ParameterValue": "true" },
+  { "ParameterKey": "AppSubnetType",          "ParameterValue": "private" }
 ]

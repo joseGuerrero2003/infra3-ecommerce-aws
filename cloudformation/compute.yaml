@@ -62,6 +62,11 @@ Parameters:
     Type: Number
     Default: 2
     Description: '2 instances = one per Availability Zone'
+  AppSubnetType:
+    Type: String
+    Default: private
+    AllowedValues: [private, public]
+    Description: "private = detrás de NAT Gateway (recomendado); public = sin NAT, el SG solo acepta tráfico del ALB"
   CpuTargetValue:
     Type: Number
     Default: 50
@@ -69,6 +74,7 @@ Parameters:
 
 Conditions:
   HasBastionHost: !Equals [!Ref CreateBastionHost, 'true']
+  UsePublicSubnets: !Equals [!Ref AppSubnetType, 'public']
 
 Resources:
 
@@ -171,7 +177,7 @@ Resources:
 
               DB_HOST=$(aws ssm get-parameter \
                 --name "/${ProjectName}/${Environment}/db/endpoint" \
-                --query "Parameter.Value" --output text --region us-east-1 2>/dev/null || echo "localhost")
+                --query "Parameter.Value" --output text --region ${AWS::Region} 2>/dev/null || echo "localhost")
 
               cat > /app/ecommerce/backend/.env << ENVEOF
               NODE_ENV=${NodeEnvironment}
@@ -187,7 +193,7 @@ Resources:
               JWT_REFRESH_EXPIRES_IN=7d
               CORS_ORIGIN=*
               LOG_LEVEL=info
-              AWS_REGION=us-east-1
+              AWS_REGION=${AWS::Region}
               CLOUDWATCH_LOG_GROUP=/ecommerce/app
               ENVEOF
 
@@ -259,11 +265,16 @@ Resources:
       MinSize: !Ref AsgMinSize
       MaxSize: !Ref AsgMaxSize
       DesiredCapacity: !Ref AsgDesiredSize
-      VPCZoneIdentifier:
-        - !ImportValue
-          Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetAId'
-        - !ImportValue
-          Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetBId'
+      VPCZoneIdentifier: !If
+        - UsePublicSubnets
+        - - !ImportValue
+            Fn::Sub: '${ProjectName}-${Environment}-PublicSubnetAId'
+          - !ImportValue
+            Fn::Sub: '${ProjectName}-${Environment}-PublicSubnetBId'
+        - - !ImportValue
+            Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetAId'
+          - !ImportValue
+            Fn::Sub: '${ProjectName}-${Environment}-PrivateSubnetBId'
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB

@@ -32,7 +32,7 @@ EOF
 ENV="dev"
 PROJECT="ecommerce"
 PARAMS_FILE="$CFN_DIR/parameters/dev.json"
-REGION="us-east-1"
+REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 SKIP_TO=""
 
 while [[ $# -gt 0 ]]; do
