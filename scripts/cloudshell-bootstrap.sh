@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 CFN_DIR="$PROJECT_ROOT/cloudformation"
 PARAMS_FILE="$PROJECT_ROOT/cloudformation/parameters/my-dev.json"
-REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 PROJECT="ecommerce"
 ENV="dev"
 
@@ -40,7 +40,8 @@ log_ok "User ARN:   $USER_ARN"
 
 echo ""
 echo -e "${BOLD}--- Región activa ---${NC}"
-REGION=$(aws configure get region 2>/dev/null || echo "us-east-1")
+REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null)}}"
+REGION="${REGION:-us-east-1}"
 log_ok "Región: $REGION"
 export AWS_DEFAULT_REGION="$REGION"
 
@@ -113,9 +114,33 @@ if aws iam get-instance-profile --instance-profile-name LabInstanceProfile > /de
   log_ok "LabInstanceProfile detectado: $LAB_PROFILE_ARN"
   log_info "Se usará LabInstanceProfile (modo AWS Academy)"
 else
-  log_info "LabInstanceProfile no encontrado — se creará EC2Role propio"
-  log_info "(esto es normal en cuentas AWS fuera de Academy)"
+  log_info "LabInstanceProfile no encontrado — buscando otro perfil de instancia existente"
 fi
+
+# Perfil de instancia para el Auto Scaling Group.
+# AWS Academy no permite crear roles IAM, así que se reutiliza uno existente.
+# Se puede forzar con: export INSTANCE_PROFILE_NAME=<nombre>
+INSTANCE_PROFILE_NAME="${INSTANCE_PROFILE_NAME:-}"
+if [ -z "$INSTANCE_PROFILE_NAME" ] && [ -n "$LAB_PROFILE_ARN" ]; then
+  INSTANCE_PROFILE_NAME="LabInstanceProfile"
+fi
+if [ -z "$INSTANCE_PROFILE_NAME" ]; then
+  INSTANCE_PROFILE_NAME=$(aws iam list-instance-profiles \
+    --query "InstanceProfiles[?contains(InstanceProfileName, 'SsmRole') || contains(InstanceProfileName, 'Lab') || contains(InstanceProfileName, 'EC2')].InstanceProfileName | [0]" \
+    --output text 2>/dev/null || echo "")
+  [ "$INSTANCE_PROFILE_NAME" = "None" ] && INSTANCE_PROFILE_NAME=""
+fi
+if [ -z "$INSTANCE_PROFILE_NAME" ]; then
+  # Cuenta AWS estándar: el stack de seguridad crea el rol y el perfil
+  INSTANCE_PROFILE_NAME="${PROJECT}-${ENV}-ec2-profile"
+  STANDARD_ACCOUNT=true
+  log_info "Cuenta estándar: security.yaml creará el perfil $INSTANCE_PROFILE_NAME"
+fi
+if [ -z "$LAB_PROFILE_ARN" ] && [ "${STANDARD_ACCOUNT:-false}" != "true" ]; then
+  LAB_PROFILE_ARN=$(aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE_NAME" \
+    --query 'InstanceProfile.Arn' --output text 2>/dev/null || echo "")
+fi
+log_ok "Perfil de instancia para el ASG: $INSTANCE_PROFILE_NAME"
 
 # ══════════════════════════════════════════════════
 # FASE 2 — Generar my-dev.json
@@ -130,13 +155,21 @@ DB_PASS=$(python3 -c "import secrets,string; \
 JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 JWT_REFRESH=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 
+# Modo de red: NO_NAT=true para cuentas sin NAT Gateway (p. ej. el registro nuevo de AWS)
+if [ "${NO_NAT:-false}" = "true" ]; then
+  ENABLE_NAT="false"; APP_SUBNET_TYPE="public"
+  log_info "Modo sin NAT Gateway: instancias de app en subredes públicas (SG solo acepta tráfico del ALB)"
+else
+  ENABLE_NAT="true"; APP_SUBNET_TYPE="private"
+fi
+
 # Build my-dev.json
 cat > "$PARAMS_FILE" <<JSONEOF
 [
   { "ParameterKey": "Environment",           "ParameterValue": "$ENV" },
   { "ParameterKey": "ProjectName",           "ParameterValue": "$PROJECT" },
   { "ParameterKey": "GitHubRepoUrl",         "ParameterValue": "https://github.com/joseGuerrero2003/infra3-ecommerce-aws.git" },
-  { "ParameterKey": "GitHubBranch",          "ParameterValue": "main" },
+  { "ParameterKey": "GitHubBranch",          "ParameterValue": "${APP_BRANCH:-main}" },
   { "ParameterKey": "BastionKeyName",        "ParameterValue": "vockey" },
   { "ParameterKey": "AllowedBastionCIDR",    "ParameterValue": "0.0.0.0/0" },
   { "ParameterKey": "DBUsername",            "ParameterValue": "dbadmin" },
@@ -147,11 +180,15 @@ cat > "$PARAMS_FILE" <<JSONEOF
   { "ParameterKey": "NotificationEmail",     "ParameterValue": "joseguerrero1912cali@gmail.com" },
   { "ParameterKey": "AppPort",               "ParameterValue": "3000" },
   { "ParameterKey": "NodeEnvironment",       "ParameterValue": "production" },
-  { "ParameterKey": "InstanceType",          "ParameterValue": "t2.micro" },
-  { "ParameterKey": "AsgMinSize",            "ParameterValue": "1" },
+  { "ParameterKey": "InstanceType",          "ParameterValue": "${INSTANCE_TYPE:-t3.micro}" },
+  { "ParameterKey": "AsgMinSize",            "ParameterValue": "2" },
   { "ParameterKey": "AsgMaxSize",            "ParameterValue": "3" },
-  { "ParameterKey": "AsgDesiredSize",        "ParameterValue": "1" },
-  { "ParameterKey": "LabInstanceProfileArn", "ParameterValue": "$LAB_PROFILE_ARN" }
+  { "ParameterKey": "AsgDesiredSize",        "ParameterValue": "2" },
+  { "ParameterKey": "LabInstanceProfileArn", "ParameterValue": "$LAB_PROFILE_ARN" },
+  { "ParameterKey": "InstanceProfileName",   "ParameterValue": "$INSTANCE_PROFILE_NAME" },
+  { "ParameterKey": "EnableNatGateway",      "ParameterValue": "$ENABLE_NAT" },
+  { "ParameterKey": "AppSubnetType",         "ParameterValue": "$APP_SUBNET_TYPE" },
+  { "ParameterKey": "BackupRetentionDays",   "ParameterValue": "${DB_BACKUP_DAYS:-7}" }
 ]
 JSONEOF
 
@@ -165,7 +202,8 @@ else
   log_error "JSON inválido en $PARAMS_FILE"
 fi
 
-PLACEHOLDER_COUNT=$(grep -c "CHANGE_ME\|YOUR_USER\|ACADEMY_AUTO_DETECT" "$PARAMS_FILE" 2>/dev/null || echo "0")
+PLACEHOLDER_COUNT=$(grep -c "CHANGE_ME\|YOUR_USER\|ACADEMY_AUTO_DETECT" "$PARAMS_FILE" 2>/dev/null || true)
+PLACEHOLDER_COUNT=${PLACEHOLDER_COUNT:-0}
 if [ "$PLACEHOLDER_COUNT" -gt 0 ]; then
   log_error "Aún hay $PLACEHOLDER_COUNT placeholders sin reemplazar en my-dev.json"
 fi

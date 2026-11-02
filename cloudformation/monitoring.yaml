@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ECommerce Monitoring Stack - CloudWatch Alarms, SNS, CloudTrail'
+Description: 'ECommerce Monitoring Stack - CloudWatch Alarms, SNS, Log Groups'
 
 Parameters:
   Environment:
@@ -46,7 +46,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-high-cpu'
-      AlarmDescription: Alert when app instance CPU > 60% for 2 consecutive periods
+      AlarmDescription: Alert when average ASG CPU > 60% for 2 consecutive periods
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -55,9 +55,9 @@ Resources:
       Threshold: 60
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: InstanceId
+        - Name: AutoScalingGroupName
           Value: !ImportValue
-            Fn::Sub: '${ProjectName}-${Environment}-AppInstanceId'
+            Fn::Sub: '${ProjectName}-${Environment}-AsgName'
       AlarmActions:
         - !Ref SNSTopic
       OKActions:
@@ -68,7 +68,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-low-cpu'
-      AlarmDescription: Alert when app instance CPU < 10% for 5 consecutive periods
+      AlarmDescription: Alert when average ASG CPU < 10% for 5 consecutive periods
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -77,9 +77,9 @@ Resources:
       Threshold: 10
       ComparisonOperator: LessThanThreshold
       Dimensions:
-        - Name: InstanceId
+        - Name: AutoScalingGroupName
           Value: !ImportValue
-            Fn::Sub: '${ProjectName}-${Environment}-AppInstanceId'
+            Fn::Sub: '${ProjectName}-${Environment}-AsgName'
       AlarmActions:
         - !Ref SNSTopic
       TreatMissingData: notBreaching

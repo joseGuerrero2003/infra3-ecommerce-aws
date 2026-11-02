@@ -13,9 +13,12 @@
   { "ParameterKey": "NotificationEmail",      "ParameterValue": "joseguerrero1912cali@gmail.com" },
   { "ParameterKey": "AppPort",                "ParameterValue": "3000" },
   { "ParameterKey": "NodeEnvironment",        "ParameterValue": "production" },
-  { "ParameterKey": "InstanceType",           "ParameterValue": "t2.micro" },
-  { "ParameterKey": "AsgMinSize",             "ParameterValue": "1" },
+  { "ParameterKey": "InstanceType",           "ParameterValue": "t3.micro" },
+  { "ParameterKey": "AsgMinSize",             "ParameterValue": "2" },
   { "ParameterKey": "AsgMaxSize",             "ParameterValue": "3" },
-  { "ParameterKey": "AsgDesiredSize",         "ParameterValue": "1" },
-  { "ParameterKey": "LabInstanceProfileArn",  "ParameterValue": "ACADEMY_AUTO_DETECT" }
+  { "ParameterKey": "AsgDesiredSize",         "ParameterValue": "2" },
+  { "ParameterKey": "LabInstanceProfileArn",  "ParameterValue": "ACADEMY_AUTO_DETECT" },
+  { "ParameterKey": "InstanceProfileName",    "ParameterValue": "ACADEMY_AUTO_DETECT" },
+  { "ParameterKey": "EnableNatGateway",       "ParameterValue": "true" },
+  { "ParameterKey": "AppSubnetType",          "ParameterValue": "private" }
 ]

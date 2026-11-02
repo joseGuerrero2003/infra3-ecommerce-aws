@@ -32,7 +32,7 @@ EOF
 ENV="dev"
 PROJECT="ecommerce"
 PARAMS_FILE="$CFN_DIR/parameters/dev.json"
-REGION="us-east-1"
+REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 SKIP_TO=""
 
 while [[ $# -gt 0 ]]; do
@@ -86,13 +86,30 @@ deploy_stack() {
   local PARAMS
   PARAMS=$(filter_params "$TEMPLATE" "$PARAMS_FILE")
 
-  aws cloudformation deploy \
+  # A stack left in ROLLBACK_COMPLETE cannot be updated: delete it first
+  local CURRENT
+  CURRENT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" \
+    --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+  if [ "$CURRENT" = "ROLLBACK_COMPLETE" ]; then
+    log_info "Stack $STACK_NAME is in ROLLBACK_COMPLETE, deleting before retry..."
+    aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION"
+  fi
+
+  if ! aws cloudformation deploy \
     --stack-name "$STACK_NAME" \
     --template-file "$TEMPLATE" \
     --parameter-overrides $PARAMS \
     --capabilities CAPABILITY_NAMED_IAM \
     --region "$REGION" \
-    --no-fail-on-empty-changeset
+    --no-fail-on-empty-changeset; then
+    echo ""
+    log_info "Causa del fallo (eventos *_FAILED):"
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" --region "$REGION" \
+      --query "StackEvents[?contains(ResourceStatus,'FAILED')].[LogicalResourceId,ResourceStatusReason]" \
+      --output table 2>/dev/null | head -30
+    log_error "Stack failed: $STACK_NAME"
+  fi
 
   log_ok "Stack deployed: $STACK_NAME"
 }
@@ -101,6 +118,7 @@ wait_for_stack() {
   local STACK_NAME="$1"
   log_info "Waiting for stack to settle: $STACK_NAME"
   local STATUS
+  local i
   for i in $(seq 1 60); do
     STATUS=$(aws cloudformation describe-stacks \
       --stack-name "$STACK_NAME" \
