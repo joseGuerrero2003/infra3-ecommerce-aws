@@ -169,7 +169,7 @@ cat > "$PARAMS_FILE" <<JSONEOF
   { "ParameterKey": "Environment",           "ParameterValue": "$ENV" },
   { "ParameterKey": "ProjectName",           "ParameterValue": "$PROJECT" },
   { "ParameterKey": "GitHubRepoUrl",         "ParameterValue": "https://github.com/joseGuerrero2003/infra3-ecommerce-aws.git" },
-  { "ParameterKey": "GitHubBranch",          "ParameterValue": "main" },
+  { "ParameterKey": "GitHubBranch",          "ParameterValue": "${APP_BRANCH:-main}" },
   { "ParameterKey": "BastionKeyName",        "ParameterValue": "vockey" },
   { "ParameterKey": "AllowedBastionCIDR",    "ParameterValue": "0.0.0.0/0" },
   { "ParameterKey": "DBUsername",            "ParameterValue": "dbadmin" },
