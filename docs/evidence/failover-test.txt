@@ -1,0 +1,14 @@
+Prueba de failover - 2026-11-02 (us-east-2)
+Se terminó manualmente la instancia i-082aadf2a14e2b008 (us-east-2a) mientras se consultaba /health cada 5 s a través del ALB.
+El ASG lanzó la instancia de reemplazo i-027aa9568bf3393fe 2 segundos después de la terminación.
+
+hora(UTC) código HTTP
+20:17:12  200
+20:17:17  200
+20:17:22  000   <- única petición sin respuesta (timeout 5 s) mientras el ALB retiraba la instancia
+20:17:32  200
+20:17:37  200
+20:17:42  200
+...       200   (20 respuestas 200 consecutivas hasta 20:19:12)
+
+Resultado: 23/24 respuestas exitosas; interrupción de ~5-10 s y recuperación automática.

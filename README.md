@@ -47,6 +47,26 @@ Aplicación de comercio electrónico (Node.js/Express + PostgreSQL) desplegada e
         CloudWatch · SNS · Systems Manager
 ```
 
+## Evidencia del despliegue
+
+Desplegado el 2 de noviembre de 2026 en `us-east-2` con `scripts/cloudshell-bootstrap.sh` (5 stacks en `CREATE_COMPLETE`).
+
+**Auto Scaling Group en dos zonas de disponibilidad, ambas instancias sanas en el ALB:**
+
+![ASG Multi-AZ](docs/evidence/asg-multi-az-healthy.png)
+
+**Prueba de failover:** se terminó a mano la instancia de `us-east-2a` mientras se consultaba `/health` cada 5 s. El ALB siguió respondiendo (23 de 24 peticiones con `200`, una sola sin respuesta durante ~5-10 s) y el ASG lanzó la instancia de reemplazo 2 segundos después. Detalle en [`docs/evidence/failover-test.txt`](docs/evidence/failover-test.txt).
+
+![Actividades del ASG](docs/evidence/asg-self-healing-activities.png)
+
+La misma prueba reveló que con `MinSize: 1` la política de target tracking reducía la capacidad a una sola zona cuando no había carga; por eso el mínimo quedó en 2.
+
+### Lecciones del despliegue
+
+- El plan gratuito de AWS rechaza `t2.micro` y retenciones de backup de RDS mayores a 1 día: ambos valores quedaron parametrizados.
+- RDS PostgreSQL 15+ exige SSL (`rds.force_ssl = 1`); la configuración de producción del backend lo habilita.
+- Las cuentas del registro nuevo de AWS no soportan NAT Gateway: `EnableNatGateway=false` + `AppSubnetType=public` despliega las instancias en subredes públicas con un security group que solo acepta tráfico del ALB.
+
 ## Stacks de CloudFormation
 
 | Stack | Recursos principales |
