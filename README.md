@@ -51,6 +51,8 @@ Aplicación de comercio electrónico (Node.js/Express + PostgreSQL) desplegada e
 
 Desplegado el 2 de noviembre de 2026 en `us-east-2` con `scripts/cloudshell-bootstrap.sh` (5 stacks en `CREATE_COMPLETE`).
 
+![Stacks de CloudFormation](docs/evidence/cloudformation-stacks.png)
+
 **La tienda sirviendo tráfico a través del Application Load Balancer (catálogo leído desde RDS):**
 
 ![TechShop en producción](docs/evidence/techshop-alb-production.png)

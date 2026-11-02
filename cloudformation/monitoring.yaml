@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ECommerce Monitoring Stack - CloudWatch Alarms, SNS, CloudTrail'
+Description: 'ECommerce Monitoring Stack - CloudWatch Alarms, SNS, Log Groups'
 
 Parameters:
   Environment:
