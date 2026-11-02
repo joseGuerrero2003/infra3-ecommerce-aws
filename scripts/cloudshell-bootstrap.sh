@@ -113,9 +113,32 @@ if aws iam get-instance-profile --instance-profile-name LabInstanceProfile > /de
   log_ok "LabInstanceProfile detectado: $LAB_PROFILE_ARN"
   log_info "Se usará LabInstanceProfile (modo AWS Academy)"
 else
-  log_info "LabInstanceProfile no encontrado — se creará EC2Role propio"
-  log_info "(esto es normal en cuentas AWS fuera de Academy)"
+  log_info "LabInstanceProfile no encontrado — buscando otro perfil de instancia existente"
 fi
+
+# Perfil de instancia para el Auto Scaling Group.
+# AWS Academy no permite crear roles IAM, así que se reutiliza uno existente.
+# Se puede forzar con: export INSTANCE_PROFILE_NAME=<nombre>
+INSTANCE_PROFILE_NAME="${INSTANCE_PROFILE_NAME:-}"
+if [ -z "$INSTANCE_PROFILE_NAME" ] && [ -n "$LAB_PROFILE_ARN" ]; then
+  INSTANCE_PROFILE_NAME="LabInstanceProfile"
+fi
+if [ -z "$INSTANCE_PROFILE_NAME" ]; then
+  INSTANCE_PROFILE_NAME=$(aws iam list-instance-profiles \
+    --query "InstanceProfiles[?contains(InstanceProfileName, 'SsmRole') || contains(InstanceProfileName, 'Lab') || contains(InstanceProfileName, 'EC2')].InstanceProfileName | [0]" \
+    --output text 2>/dev/null || echo "")
+  [ "$INSTANCE_PROFILE_NAME" = "None" ] && INSTANCE_PROFILE_NAME=""
+fi
+if [ -z "$INSTANCE_PROFILE_NAME" ]; then
+  log_info "Perfiles de instancia disponibles en la cuenta:"
+  aws iam list-instance-profiles --query 'InstanceProfiles[].InstanceProfileName' --output table 2>/dev/null || true
+  log_error "No se detectó un perfil de instancia. Ejecuta: export INSTANCE_PROFILE_NAME=<nombre> y vuelve a correr el script"
+fi
+if [ -z "$LAB_PROFILE_ARN" ]; then
+  LAB_PROFILE_ARN=$(aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE_NAME" \
+    --query 'InstanceProfile.Arn' --output text 2>/dev/null || echo "")
+fi
+log_ok "Perfil de instancia para el ASG: $INSTANCE_PROFILE_NAME"
 
 # ══════════════════════════════════════════════════
 # FASE 2 — Generar my-dev.json
@@ -150,8 +173,9 @@ cat > "$PARAMS_FILE" <<JSONEOF
   { "ParameterKey": "InstanceType",          "ParameterValue": "t2.micro" },
   { "ParameterKey": "AsgMinSize",            "ParameterValue": "1" },
   { "ParameterKey": "AsgMaxSize",            "ParameterValue": "3" },
-  { "ParameterKey": "AsgDesiredSize",        "ParameterValue": "1" },
-  { "ParameterKey": "LabInstanceProfileArn", "ParameterValue": "$LAB_PROFILE_ARN" }
+  { "ParameterKey": "AsgDesiredSize",        "ParameterValue": "2" },
+  { "ParameterKey": "LabInstanceProfileArn", "ParameterValue": "$LAB_PROFILE_ARN" },
+  { "ParameterKey": "InstanceProfileName",   "ParameterValue": "$INSTANCE_PROFILE_NAME" }
 ]
 JSONEOF
 

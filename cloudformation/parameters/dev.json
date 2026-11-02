@@ -16,6 +16,7 @@
   { "ParameterKey": "InstanceType",           "ParameterValue": "t2.micro" },
   { "ParameterKey": "AsgMinSize",             "ParameterValue": "1" },
   { "ParameterKey": "AsgMaxSize",             "ParameterValue": "3" },
-  { "ParameterKey": "AsgDesiredSize",         "ParameterValue": "1" },
-  { "ParameterKey": "LabInstanceProfileArn",  "ParameterValue": "ACADEMY_AUTO_DETECT" }
+  { "ParameterKey": "AsgDesiredSize",         "ParameterValue": "2" },
+  { "ParameterKey": "LabInstanceProfileArn",  "ParameterValue": "ACADEMY_AUTO_DETECT" },
+  { "ParameterKey": "InstanceProfileName",    "ParameterValue": "ACADEMY_AUTO_DETECT" }
 ]

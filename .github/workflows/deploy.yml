@@ -42,39 +42,46 @@ jobs:
             --parameter-overrides \
               Environment=dev \
               ProjectName=ecommerce \
-              AppInstanceId=${{ secrets.APP_INSTANCE_ID }} \
+              GitHubRepoUrl=${{ github.server_url }}/${{ github.repository }}.git \
+              GitHubBranch=main \
+              DBUsername=${{ secrets.DB_USERNAME }} \
+              DBPassword=${{ secrets.DB_PASSWORD }} \
+              DBName=ecommerce \
+              JwtSecret=${{ secrets.JWT_SECRET }} \
+              JwtRefreshSecret=${{ secrets.JWT_REFRESH_SECRET }} \
+              InstanceProfileName=${{ secrets.INSTANCE_PROFILE_NAME }} \
             --no-fail-on-empty-changeset
 
-      - name: Deploy application code (SSM Run Command)
+      - name: Rolling deploy (ASG instance refresh)
         run: |
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "${{ secrets.APP_INSTANCE_ID }}" \
-            --document-name "AWS-RunShellScript" \
-            --comment "GitHub Actions deploy ${{ github.sha }}" \
-            --parameters 'commands=["bash /app/ecommerce/scripts/deploy.sh"]' \
-            --query "Command.CommandId" --output text)
-          echo "SSM command: $CMD_ID"
-          aws ssm wait command-executed \
-            --command-id "$CMD_ID" \
-            --instance-id "${{ secrets.APP_INSTANCE_ID }}" || true
-          STATUS=$(aws ssm get-command-invocation \
-            --command-id "$CMD_ID" \
-            --instance-id "${{ secrets.APP_INSTANCE_ID }}" \
-            --query "Status" --output text)
-          echo "Status: $STATUS"
-          aws ssm get-command-invocation \
-            --command-id "$CMD_ID" \
-            --instance-id "${{ secrets.APP_INSTANCE_ID }}" \
-            --query "StandardOutputContent" --output text | tail -30
-          [ "$STATUS" = "Success" ]
+          ASG_NAME=$(aws cloudformation list-exports \
+            --query "Exports[?Name=='ecommerce-dev-AsgName'].Value" --output text)
+          echo "ASG: $ASG_NAME"
+          REFRESH_ID=$(aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name "$ASG_NAME" \
+            --preferences '{"MinHealthyPercentage":50,"InstanceWarmup":600}' \
+            --query InstanceRefreshId --output text)
+          echo "Instance refresh: $REFRESH_ID"
+          for i in $(seq 1 60); do
+            STATUS=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name "$ASG_NAME" \
+              --instance-refresh-ids "$REFRESH_ID" \
+              --query 'InstanceRefreshes[0].[Status,PercentageComplete]' --output text)
+            echo "[$i/60] $STATUS"
+            case "$STATUS" in
+              Successful*) exit 0 ;;
+              Failed*|Cancelled*|RollbackSuccessful*|RollbackFailed*) exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "Timeout waiting for instance refresh"
+          exit 1
 
       - name: Verify deployment
         run: |
           ALB_DNS=$(aws cloudformation list-exports \
-            --query "Exports[?Name=='ecommerce-dev-AlbDnsName'].Value" \
-            --output text)
-          echo "Waiting for ALB health check..."
-          for i in {1..20}; do
+            --query "Exports[?Name=='ecommerce-dev-AlbDnsName'].Value" --output text)
+          for i in $(seq 1 20); do
             STATUS=$(curl -s -o /dev/null -w '%{http_code}' "http://$ALB_DNS/health" --max-time 10 || echo 0)
             if [ "$STATUS" = "200" ]; then
               echo "Deployment verified! App is healthy at http://$ALB_DNS"

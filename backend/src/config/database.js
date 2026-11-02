@@ -29,8 +29,9 @@ module.exports = {
     port: parseInt(process.env.DB_PORT || '5432', 10),
     dialect: 'postgres',
     logging: false,
+    // RDS PostgreSQL 15+ enforces SSL by default (rds.force_ssl = 1)
     dialectOptions: {
-      ssl: false,
+      ssl: { require: true, rejectUnauthorized: false },
     },
     pool: { max: 10, min: 2, acquire: 30000, idle: 10000 },
   },
