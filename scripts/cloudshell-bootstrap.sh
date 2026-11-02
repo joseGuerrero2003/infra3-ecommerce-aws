@@ -187,7 +187,8 @@ cat > "$PARAMS_FILE" <<JSONEOF
   { "ParameterKey": "LabInstanceProfileArn", "ParameterValue": "$LAB_PROFILE_ARN" },
   { "ParameterKey": "InstanceProfileName",   "ParameterValue": "$INSTANCE_PROFILE_NAME" },
   { "ParameterKey": "EnableNatGateway",      "ParameterValue": "$ENABLE_NAT" },
-  { "ParameterKey": "AppSubnetType",         "ParameterValue": "$APP_SUBNET_TYPE" }
+  { "ParameterKey": "AppSubnetType",         "ParameterValue": "$APP_SUBNET_TYPE" },
+  { "ParameterKey": "BackupRetentionDays",   "ParameterValue": "${DB_BACKUP_DAYS:-7}" }
 ]
 JSONEOF
 

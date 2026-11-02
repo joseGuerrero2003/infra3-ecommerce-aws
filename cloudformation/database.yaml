@@ -24,6 +24,12 @@ Parameters:
     Type: String
     Default: '18.3'
     Description: 'PostgreSQL engine version. AWS Academy us-east-1: 18.3'
+  BackupRetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 0
+    MaxValue: 35
+    Description: 'Días de retención de backups automáticos (el plan gratuito de AWS solo permite 1)'
 
 Resources:
   DBSubnetGroup:
@@ -61,7 +67,7 @@ Resources:
       VPCSecurityGroups:
         - !ImportValue
           Fn::Sub: '${ProjectName}-${Environment}-SgRdsId'
-      BackupRetentionPeriod: 7
+      BackupRetentionPeriod: !Ref BackupRetentionDays
       PreferredBackupWindow: 03:00-04:00
       PreferredMaintenanceWindow: sun:04:00-sun:05:00
       AutoMinorVersionUpgrade: true
